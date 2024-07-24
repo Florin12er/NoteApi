@@ -48,7 +48,7 @@ func main() {
 	r.POST("/upload", middleware.CheckAuthenticated(), handlers.UploadImage)
 
 	// WebSocket route
-	r.GET("/ws", func(c *gin.Context) {
+	r.GET("/ws",middleware.CheckAuthenticated(), func(c *gin.Context) {
 		websocket.HandleConnections(c)
 	})
 

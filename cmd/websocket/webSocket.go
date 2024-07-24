@@ -6,6 +6,7 @@ import (
     "github.com/gorilla/websocket"
     "log"
     "net/http"
+    "sync"
 )
 
 var upgrader = websocket.Upgrader{
@@ -16,8 +17,14 @@ var upgrader = websocket.Upgrader{
     },
 }
 
-var clients = make(map[*websocket.Conn]bool)
+type Client struct {
+    conn   *websocket.Conn
+    userID uint
+}
+
+var clients = make(map[*Client]bool)
 var broadcast = make(chan Message)
+var mu sync.Mutex
 
 type Message struct {
     Type string      `json:"type"`
@@ -32,13 +39,34 @@ func HandleConnections(c *gin.Context) {
     }
     defer ws.Close()
 
-    clients[ws] = true
+    userID, exists := c.Get("user_id")  // Changed from "userID" to "user_id" to match the middleware
+    if !exists {
+        log.Printf("User ID not found in context")
+        return
+    }
+
+    userIDUint, ok := userID.(uint)
+    if !ok {
+        log.Printf("User ID is not of type uint")
+        return
+    }
+
+    client := &Client{
+        conn:   ws,
+        userID: userIDUint,
+    }
+
+    mu.Lock()
+    clients[client] = true
+    mu.Unlock()
 
     for {
         _, _, err := ws.ReadMessage()
         if err != nil {
             log.Printf("Error reading message: %v", err)
-            delete(clients, ws)
+            mu.Lock()
+            delete(clients, client)
+            mu.Unlock()
             break
         }
     }
@@ -47,23 +75,26 @@ func HandleConnections(c *gin.Context) {
 func HandleMessages() {
     for {
         msg := <-broadcast
+        mu.Lock()
         for client := range clients {
-            err := client.WriteJSON(msg)
+            err := client.conn.WriteJSON(msg)
             if err != nil {
                 log.Printf("Error writing JSON: %v", err)
-                client.Close()
+                client.conn.Close()
                 delete(clients, client)
             }
         }
+        mu.Unlock()
     }
 }
 
-func BroadcastNoteList(notes []models.Note) {
+func BroadcastNoteListToUser(notes []models.Note, userID uint) {
     noteList := make([]map[string]interface{}, len(notes))
     for i, note := range notes {
         noteList[i] = map[string]interface{}{
             "id":    note.ID,
             "title": note.Title,
+            "content": note.Content,
         }
     }
 
@@ -72,24 +103,39 @@ func BroadcastNoteList(notes []models.Note) {
         Data: noteList,
     }
 
-    broadcast <- msg
+    broadcastToUser(msg, userID)
 }
 
-func BroadcastNoteUpdate(note models.Note) {
+func BroadcastNoteUpdateToUser(note models.Note, userID uint) {
     msg := Message{
         Type: "noteUpdate",
         Data: note,
     }
 
-    broadcast <- msg
+    broadcastToUser(msg, userID)
 }
 
-func BroadcastNoteDelete(noteID uint) {
+func BroadcastNoteDeleteToUser(noteID uint, userID uint) {
     msg := Message{
         Type: "noteDelete",
         Data: noteID,
     }
 
-    broadcast <- msg
+    broadcastToUser(msg, userID)
+}
+
+func broadcastToUser(msg Message, userID uint) {
+    mu.Lock()
+    defer mu.Unlock()
+    for client := range clients {
+        if client.userID == userID {
+            err := client.conn.WriteJSON(msg)
+            if err != nil {
+                log.Printf("Error writing JSON: %v", err)
+                client.conn.Close()
+                delete(clients, client)
+            }
+        }
+    }
 }
 
