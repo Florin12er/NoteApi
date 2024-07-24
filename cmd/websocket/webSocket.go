@@ -1,4 +1,3 @@
-// websocket/websocket.go
 package websocket
 
 import (
@@ -36,15 +35,12 @@ func HandleConnections(c *gin.Context) {
     clients[ws] = true
 
     for {
-        var msg Message
-        err := ws.ReadJSON(&msg)
+        _, _, err := ws.ReadMessage()
         if err != nil {
-            log.Printf("Error reading JSON: %v", err)
+            log.Printf("Error reading message: %v", err)
             delete(clients, ws)
             break
         }
-
-        broadcast <- msg
     }
 }
 
@@ -83,6 +79,15 @@ func BroadcastNoteUpdate(note models.Note) {
     msg := Message{
         Type: "noteUpdate",
         Data: note,
+    }
+
+    broadcast <- msg
+}
+
+func BroadcastNoteDelete(noteID uint) {
+    msg := Message{
+        Type: "noteDelete",
+        Data: noteID,
     }
 
     broadcast <- msg

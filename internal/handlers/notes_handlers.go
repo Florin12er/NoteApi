@@ -1,4 +1,3 @@
-// internal/handlers/notes_handlers.go
 package handlers
 
 import (
@@ -25,9 +24,12 @@ func CreateNote(c *gin.Context) {
         return
     }
 
+    // Broadcast the new note
+    websocket.BroadcastNoteUpdate(note)
+
     // Broadcast the updated note list
     var notes []models.Note
-    database.DB.Select("id, title, content").Find(&notes)
+    database.DB.Select("id, title").Find(&notes)
     websocket.BroadcastNoteList(notes)
 
     c.JSON(http.StatusCreated, note)
@@ -69,12 +71,10 @@ func UpdateNote(c *gin.Context) {
     // Broadcast the updated note
     websocket.BroadcastNoteUpdate(note)
 
-    // If the title changed, broadcast the updated note list
-    if note.Title != "" {
-        var notes []models.Note
-        database.DB.Select("id, title").Find(&notes)
-        websocket.BroadcastNoteList(notes)
-    }
+    // Broadcast the updated note list
+    var notes []models.Note
+    database.DB.Select("id, title").Find(&notes)
+    websocket.BroadcastNoteList(notes)
 
     c.JSON(http.StatusOK, note)
 }
@@ -88,12 +88,13 @@ func DeleteNote(c *gin.Context) {
         return
     }
 
-    note.LastRemove = time.Now()
-
     if err := database.DB.Delete(&note).Error; err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete note"})
         return
     }
+
+    // Broadcast the deleted note ID
+    websocket.BroadcastNoteDelete(note.ID)
 
     // Broadcast the updated note list
     var notes []models.Note

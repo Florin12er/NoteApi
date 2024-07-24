@@ -8,7 +8,6 @@ import (
 	"NoteApi/internal/middleware"
 	"NoteApi/pkg/utils"
 	"log"
-
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -27,11 +26,16 @@ func main() {
 		panic(err)
 	}
 
-	// In your main function, before defining routes
+	// CORS configuration
 	config := cors.DefaultConfig()
 	config.AllowOrigins = []string{"http://localhost:5173"} // or whatever your frontend URL is
 	config.AllowCredentials = true
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
 	r.Use(cors.New(config))
+
+	// Serve static files from the uploads directory
+	r.Static("/uploads", "./uploads")
 
 	// Note routes
 	r.POST("/notes", middleware.CheckAuthenticated(), handlers.CreateNote)
@@ -50,8 +54,14 @@ func main() {
 
 	go websocket.HandleMessages()
 
+	// Ensure the uploads directory exists
+	if err := utils.EnsureDir("uploads"); err != nil {
+		log.Fatalf("failed to create uploads directory: %v", err)
+	}
+
 	// Start the server
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
 }
+
