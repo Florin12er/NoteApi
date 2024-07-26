@@ -35,7 +35,7 @@ func main() {
 	r.Use(cors.New(config))
 
 	// Serve static files from the uploads directory
-	r.Static("/uploads", "./uploads")
+	r.Static("/uploads", "../cmd/uploads")
 
 	// Note routes
 	r.POST("/notes", middleware.CheckAuthenticated(), handlers.CreateNote)
