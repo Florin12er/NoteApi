@@ -28,7 +28,7 @@ func main() {
 
 	// CORS configuration
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:5173"} // or whatever your frontend URL is
+	config.AllowOrigins = []string{"https://note-taking-dusky.vercel.app"} // or whatever your frontend URL is
 	config.AllowCredentials = true
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
 	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
