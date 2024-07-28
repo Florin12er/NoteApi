@@ -28,11 +28,11 @@ func main() {
         panic(err)
     }
 
-    config := cors.Config{
+     config := cors.Config{
         AllowOrigins:     []string{"https://note-taking-dusky.vercel.app"},
         AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
         AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-        ExposeHeaders:    []string{"Content-Length", "Content-Type", "Set-Cookie", "Authorization"},
+        ExposeHeaders:    []string{"Set-Cookie"},
         AllowCredentials: true,
         MaxAge:           12 * time.Hour,
     }
