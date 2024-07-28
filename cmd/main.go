@@ -7,9 +7,10 @@ import (
 	"NoteApi/internal/handlers"
 	"NoteApi/internal/middleware"
 	"NoteApi/pkg/utils"
-	"log"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"log"
+	"time"
 )
 
 func init() {
@@ -26,12 +27,14 @@ func main() {
 		panic(err)
 	}
 
-	// CORS configuration
-	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"https://note-taking-dusky.vercel.app"} // or whatever your frontend URL is
-	config.AllowCredentials = true
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Accept", "Authorization"}
+	config := cors.Config{
+		AllowOrigins:     []string{"https://note-taking-dusky.vercel.app"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+		ExposeHeaders:    []string{"Set-Cookie"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}
 	r.Use(cors.New(config))
 
 	// Serve static files from the uploads directory
@@ -48,7 +51,7 @@ func main() {
 	r.POST("/upload", middleware.CheckAuthenticated(), handlers.UploadImage)
 
 	// WebSocket route
-	r.GET("/ws",middleware.CheckAuthenticated(), func(c *gin.Context) {
+	r.GET("/ws", middleware.CheckAuthenticated(), func(c *gin.Context) {
 		websocket.HandleConnections(c)
 	})
 
@@ -64,4 +67,3 @@ func main() {
 		log.Fatalf("failed to run server: %v", err)
 	}
 }
-
