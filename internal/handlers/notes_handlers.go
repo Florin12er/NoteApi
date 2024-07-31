@@ -15,19 +15,28 @@ import (
 )
 
 func CreateNote(c *gin.Context) {
+	// Parse the multipart form
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
 		return
 	}
 
-	userIDUUID, ok := userID.(uuid.UUID)
-	if !ok {
+	var userIDUUID uuid.UUID
+	switch v := userID.(type) {
+	case uuid.UUID:
+		userIDUUID = v
+	case string:
+		var err error
+		userIDUUID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+			return
+		}
+	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
 		return
 	}
-
-	// Parse the multipart form
 	if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form"})
 		return

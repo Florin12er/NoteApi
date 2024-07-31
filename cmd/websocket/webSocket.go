@@ -3,10 +3,12 @@ package websocket
 import (
 	"NoteApi/internal/models"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5" // Import JWT library
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 )
 
@@ -33,6 +35,41 @@ type Message struct {
 }
 
 func HandleConnections(c *gin.Context) {
+	// Get token from query parameter
+	token := c.Query("token")
+	if token == "" {
+		log.Println("No token provided")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
+		return
+	}
+
+	// Validate token
+	claims := &jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil {
+		log.Printf("Invalid token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+
+	// Extract user ID from claims
+	userIDStr, ok := (*claims)["sub"].(string)
+	if !ok {
+		log.Println("User ID not found in token")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found in token"})
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		log.Printf("Invalid user ID format: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID format"})
+		return
+	}
+
+	// Upgrade HTTP connection to WebSocket
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
@@ -40,21 +77,9 @@ func HandleConnections(c *gin.Context) {
 	}
 	defer ws.Close()
 
-	userID, exists := c.Get("user_id") // Changed from "userID" to "user_id" to match the middleware
-	if !exists {
-		log.Printf("User ID not found in context")
-		return
-	}
-
-	userIDUUID, ok := userID.(uuid.UUID)
-	if !ok {
-		log.Printf("User ID is not of type uuid.UUID")
-		return
-	}
-
 	client := &Client{
 		conn:   ws,
-		userID: userIDUUID,
+		userID: userID,
 	}
 
 	mu.Lock()
@@ -72,7 +97,6 @@ func HandleConnections(c *gin.Context) {
 		}
 	}
 }
-
 func HandleMessages() {
 	for {
 		msg := <-broadcast
