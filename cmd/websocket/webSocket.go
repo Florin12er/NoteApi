@@ -20,7 +20,7 @@ var upgrader = websocket.Upgrader{
 
 type Client struct {
 	conn   *websocket.Conn
-	userID uint
+	userID uuid.UUID
 }
 
 var clients = make(map[*Client]bool)
@@ -46,15 +46,15 @@ func HandleConnections(c *gin.Context) {
 		return
 	}
 
-	userIDUint, ok := userID.(uint)
+	userIDUUID, ok := userID.(uuid.UUID)
 	if !ok {
-		log.Printf("User ID is not of type uint")
+		log.Printf("User ID is not of type uuid.UUID")
 		return
 	}
 
 	client := &Client{
 		conn:   ws,
-		userID: userIDUint,
+		userID: userIDUUID,
 	}
 
 	mu.Lock()
@@ -89,41 +89,40 @@ func HandleMessages() {
 	}
 }
 
-func BroadcastNoteListToUser(notes []models.Note, userID uint) {
-    noteList := make([]map[string]interface{}, len(notes))
-    for i, note := range notes {
-        noteList[i] = map[string]interface{}{
-            "ID":      note.ID.String(), // Convert UUID to string
-            "title":   note.Title,
-            "content": note.Content,
-            // Add other fields as needed
-        }
-    }
+func BroadcastNoteListToUser(notes []models.Note, userID uuid.UUID) {
+	noteList := make([]map[string]interface{}, len(notes))
+	for i, note := range notes {
+		noteList[i] = map[string]interface{}{
+			"ID":      note.ID.String(), // Convert UUID to string
+			"title":   note.Title,
+			"content": note.Content,
+			// Add other fields as needed
+		}
+	}
 
-    msg := Message{
-        Type: "noteList",
-        Data: noteList,
-    }
+	msg := Message{
+		Type: "noteList",
+		Data: noteList,
+	}
 
-    broadcastToUser(msg, userID)
+	broadcastToUser(msg, userID)
 }
 
-
-func BroadcastNoteUpdateToUser(note models.Note, userID uint) {
+func BroadcastNoteUpdateToUser(note models.Note, userID uuid.UUID) {
 	msg := Message{
 		Type: "noteUpdate",
 		Data: map[string]interface{}{
-			"id":      note.ID.String(), // Convert UUID to string
-			"title":   note.Title,
-			"content": note.Content,
-            "dashboard_path": note.DashboardPath,
+			"id":             note.ID.String(), // Convert UUID to string
+			"title":          note.Title,
+			"content":        note.Content,
+			"dashboard_path": note.DashboardPath,
 		},
 	}
 
 	broadcastToUser(msg, userID)
 }
 
-func BroadcastNoteDeleteToUser(noteID uuid.UUID, userID uint) {
+func BroadcastNoteDeleteToUser(noteID uuid.UUID, userID uuid.UUID) {
 	msg := Message{
 		Type: "noteDelete",
 		Data: noteID.String(), // Convert UUID to string
@@ -132,7 +131,7 @@ func BroadcastNoteDeleteToUser(noteID uuid.UUID, userID uint) {
 	broadcastToUser(msg, userID)
 }
 
-func broadcastToUser(msg Message, userID uint) {
+func broadcastToUser(msg Message, userID uuid.UUID) {
 	mu.Lock()
 	defer mu.Unlock()
 	for client := range clients {

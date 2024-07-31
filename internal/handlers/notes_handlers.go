@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 )
 
 func CreateNote(c *gin.Context) {
@@ -22,7 +21,7 @@ func CreateNote(c *gin.Context) {
 		return
 	}
 
-	userIDUint, ok := userID.(uint)
+	userIDUUID, ok := userID.(uuid.UUID)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
 		return
@@ -35,11 +34,9 @@ func CreateNote(c *gin.Context) {
 	}
 
 	note := models.Note{
-		UserID:      userIDUint,
-		Title:       c.Request.FormValue("title"),
-		Content:     c.Request.FormValue("content"),
-		CreatedAt:   time.Now(),
-		LastChanged: time.Now(),
+		UserID:  userIDUUID,
+		Title:   c.Request.FormValue("title"),
+		Content: c.Request.FormValue("content"),
 	}
 
 	// Handle file upload
@@ -83,14 +80,14 @@ func CreateNote(c *gin.Context) {
 	}
 
 	// Broadcast the new note to the user
-	websocket.BroadcastNoteUpdateToUser(note, userIDUint)
+	websocket.BroadcastNoteUpdateToUser(note, userIDUUID)
 
 	// Broadcast the updated note list to the user
 	var notes []models.Note
-	database.DB.Where("user_id = ?", userIDUint).
+	database.DB.Where("user_id = ?", userIDUUID).
 		Select("id, title, content, dashboard_path").
 		Find(&notes)
-	websocket.BroadcastNoteListToUser(notes, userIDUint)
+	websocket.BroadcastNoteListToUser(notes, userIDUUID)
 
 	c.JSON(http.StatusCreated, note)
 }
@@ -109,72 +106,76 @@ func GetNote(c *gin.Context) {
 }
 
 func UpdateNote(c *gin.Context) {
-    userID, _ := c.Get("user_id")
-    id := c.Param("id")
-    var note models.Note
+	userID, _ := c.Get("user_id")
+	id := c.Param("id")
+	var note models.Note
 
-    if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&note).Error; err != nil {
-        c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
-        return
-    }
+	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&note).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
+		return
+	}
 
-    // Parse the multipart form
-    if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
-        c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form"})
-        return
-    }
+	// Parse the multipart form
+	if err := c.Request.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse form"})
+		return
+	}
 
-    // Update note fields
-    note.Title = c.Request.FormValue("title")
-    note.Content = c.Request.FormValue("content")
-    note.LastChanged = time.Now()
+	// Update note fields
+	note.Title = c.Request.FormValue("title")
+	note.Content = c.Request.FormValue("content")
 
-    // Handle file upload
-    file, header, err := c.Request.FormFile("dashboard_image")
-    if err == nil {
-        // Generate a unique filename
-        fileExt := filepath.Ext(header.Filename)
-        newFilename := uuid.New().String() + fileExt
+	// Handle file upload
+	file, header, err := c.Request.FormFile("dashboard_image")
+	if err == nil {
+		// Generate a unique filename
+		fileExt := filepath.Ext(header.Filename)
+		newFilename := uuid.New().String() + fileExt
 
-        // Create the uploads directory if it doesn't exist
-        uploadsDir := "./uploads"
-        if err := os.MkdirAll(uploadsDir, os.ModePerm); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create uploads directory"})
-            return
-        }
+		// Create the uploads directory if it doesn't exist
+		uploadsDir := "./uploads"
+		if err := os.MkdirAll(uploadsDir, os.ModePerm); err != nil {
+			c.JSON(
+				http.StatusInternalServerError,
+				gin.H{"error": "Failed to create uploads directory"},
+			)
+			return
+		}
 
-        // Create the file
-        dst, err := os.Create(filepath.Join(uploadsDir, newFilename))
-        if err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create the file"})
-            return
-        }
-        defer dst.Close()
+		// Create the file
+		dst, err := os.Create(filepath.Join(uploadsDir, newFilename))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create the file"})
+			return
+		}
+		defer dst.Close()
 
-        // Copy the uploaded file to the destination file
-        if _, err := io.Copy(dst, file); err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save the file"})
-            return
-        }
+		// Copy the uploaded file to the destination file
+		if _, err := io.Copy(dst, file); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save the file"})
+			return
+		}
 
-        note.DashboardPath = filepath.Join("uploads", newFilename)
-        defer file.Close()
-    }
+		note.DashboardPath = filepath.Join("uploads", newFilename)
+		defer file.Close()
+	}
 
-    if err := database.DB.Save(&note).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update note"})
-        return
-    }
+	if err := database.DB.Save(&note).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update note"})
+		return
+	}
 
-    // Broadcast the updated note to the user
-    websocket.BroadcastNoteUpdateToUser(note, userID.(uint))
+	// Broadcast the updated note to the user
+	websocket.BroadcastNoteUpdateToUser(note, userID.(uuid.UUID))
 
-    // Broadcast the updated note list to the user
-    var notes []models.Note
-    database.DB.Where("user_id = ?", userID).Select("id, title, content, dashboard_path").Find(&notes)
-    websocket.BroadcastNoteListToUser(notes, userID.(uint))
+	// Broadcast the updated note list to the user
+	var notes []models.Note
+	database.DB.Where("user_id = ?", userID).
+		Select("id, title, content, dashboard_path").
+		Find(&notes)
+	websocket.BroadcastNoteListToUser(notes, userID.(uuid.UUID))
 
-    c.JSON(http.StatusOK, note)
+	c.JSON(http.StatusOK, note)
 }
 
 func DeleteNote(c *gin.Context) {
@@ -193,12 +194,12 @@ func DeleteNote(c *gin.Context) {
 	}
 
 	// Broadcast the deleted note ID to the user
-	websocket.BroadcastNoteDeleteToUser(note.ID, userID.(uint))
+	websocket.BroadcastNoteDeleteToUser(note.ID, userID.(uuid.UUID))
 
 	// Broadcast the updated note list to the user
 	var notes []models.Note
 	database.DB.Where("user_id = ?", userID).Select("id, title").Find(&notes)
-	websocket.BroadcastNoteListToUser(notes, userID.(uint))
+	websocket.BroadcastNoteListToUser(notes, userID.(uuid.UUID))
 
 	c.JSON(http.StatusOK, gin.H{"message": "Note deleted successfully"})
 }
