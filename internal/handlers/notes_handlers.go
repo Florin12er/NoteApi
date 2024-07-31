@@ -223,27 +223,53 @@ func UpdateNote(c *gin.Context) {
 }
 
 func DeleteNote(c *gin.Context) {
-	userID, _ := c.Get("user_id")
+	userID, exists := c.Get("user_id")
+	if !exists {
+		log.Println("User ID not found in context")
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User ID not found"})
+		return
+	}
+
+	var userIDUUID uuid.UUID
+	switch v := userID.(type) {
+	case uuid.UUID:
+		userIDUUID = v
+	case string:
+		var err error
+		userIDUUID, err = uuid.Parse(v)
+		if err != nil {
+			log.Printf("Invalid user ID format: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID format"})
+			return
+		}
+	default:
+		log.Println("Invalid user ID type")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid user ID type"})
+		return
+	}
+
 	id := c.Param("id")
 	var note models.Note
 
-	if err := database.DB.Where("id = ? AND user_id = ?", id, userID).First(&note).Error; err != nil {
+	if err := database.DB.Where("id = ? AND user_id = ?", id, userIDUUID).First(&note).Error; err != nil {
+		log.Printf("Note not found: %v", err)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Note not found"})
 		return
 	}
 
 	if err := database.DB.Delete(&note).Error; err != nil {
+		log.Printf("Failed to delete note: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete note"})
 		return
 	}
 
 	// Broadcast the deleted note ID to the user
-	websocket.BroadcastNoteDeleteToUser(note.ID, userID.(uuid.UUID))
+	websocket.BroadcastNoteDeleteToUser(note.ID, userIDUUID)
 
 	// Broadcast the updated note list to the user
 	var notes []models.Note
-	database.DB.Where("user_id = ?", userID).Select("id, title").Find(&notes)
-	websocket.BroadcastNoteListToUser(notes, userID.(uuid.UUID))
+	database.DB.Where("user_id = ?", userIDUUID).Select("id, title").Find(&notes)
+	websocket.BroadcastNoteListToUser(notes, userIDUUID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Note deleted successfully"})
 }
