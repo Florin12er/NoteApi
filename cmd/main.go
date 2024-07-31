@@ -36,10 +36,11 @@ func main() {
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
-		ExposeHeaders:    []string{"Set-Cookie"},
-		AllowCredentials: true,
+		ExposeHeaders:    []string{"Content-Length", "Content-Type"},
+		AllowCredentials: false,
 		MaxAge:           12 * time.Hour,
 	}
+
 	r.Use(cors.New(config))
 
 	// Serve static files from the uploads directory

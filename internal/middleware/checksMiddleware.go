@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -13,10 +14,18 @@ import (
 
 func CheckAuthenticated() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Get the cookie from the request
-		tokenString, err := c.Cookie("token")
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
+		// Get the Authorization header from the request
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header missing"})
+			c.Abort()
+			return
+		}
+
+		// Extract the token from the Authorization header
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Bearer token missing"})
 			c.Abort()
 			return
 		}
