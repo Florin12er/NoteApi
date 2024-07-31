@@ -9,13 +9,13 @@ import (
 
 type Note struct {
 	ID            uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"ID"`
-	Title         string    `json:"title"`
-	DashboardPath string    `json:"dashboard_path"`
-	Content       string    `json:"content"`
-	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
-	LastChanged   time.Time `gorm:"autoUpdateTime" json:"last_changed"`
-	LastRemove    time.Time `json:"last_removed"`
-	UserID        uint      `json:"user_id"`
+	Title         string    `                                                       json:"title"`
+	DashboardPath string    `                                                       json:"dashboard_path"`
+	Content       string    `                                                       json:"content"`
+	CreatedAt     time.Time `gorm:"autoCreateTime"                                  json:"created_at"`
+	LastChanged   time.Time `gorm:"autoUpdateTime"                                  json:"last_changed"`
+	LastRemove    time.Time `                                                       json:"last_removed"`
+	UserID        uuid.UUID `gorm:"type:uuid"                                       json:"user_id"`
 }
 
 // BeforeCreate will set a UUID rather than numeric ID.
@@ -43,4 +43,3 @@ func (n *Note) Restore(tx *gorm.DB) error {
 	n.LastRemove = time.Time{}
 	return tx.Save(n).Error
 }
-
