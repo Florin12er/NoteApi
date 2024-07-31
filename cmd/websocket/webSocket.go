@@ -45,11 +45,20 @@ func HandleConnections(c *gin.Context) {
 
 	// Validate token
 	claims := &jwt.MapClaims{}
-	_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(os.Getenv("JWT_SECRET")), nil
-	})
+	parsedToken, err := jwt.ParseWithClaims(
+		token,
+		claims,
+		func(token *jwt.Token) (interface{}, error) {
+			return []byte(os.Getenv("JWT_SECRET")), nil
+		},
+	)
 	if err != nil {
 		log.Printf("Invalid token: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+		return
+	}
+	if !parsedToken.Valid {
+		log.Println("Token is not valid")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 		return
 	}
@@ -70,12 +79,19 @@ func HandleConnections(c *gin.Context) {
 	}
 
 	// Upgrade HTTP connection to WebSocket
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		origin := r.Header.Get("Origin")
+		return origin == "https://note-taking-dusky.vercel.app" // Replace with your frontend URL
+	}
+
 	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade to WebSocket: %v", err)
 		return
 	}
 	defer ws.Close()
+
+	log.Printf("WebSocket connection established for user: %s", userID)
 
 	client := &Client{
 		conn:   ws,
@@ -97,6 +113,7 @@ func HandleConnections(c *gin.Context) {
 		}
 	}
 }
+
 func HandleMessages() {
 	for {
 		msg := <-broadcast
